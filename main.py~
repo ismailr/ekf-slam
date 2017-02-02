@@ -206,7 +206,7 @@ def main():
     z = measure(x,m_1)
     [x_k,cov_k] = new_landmark(x,cov,z)
 
-    iter = 50
+    iter = 5000
     for num in range(iter):
         [x,cov] = [x_k,cov_k]
         u = np.array([0.,0.,np.deg2rad(0.)])
