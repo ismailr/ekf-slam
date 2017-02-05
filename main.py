@@ -3,20 +3,20 @@ from scipy.linalg import block_diag
 import math
 
 # initial pose
-x_0 = np.array([0.,0.,0.]) 
+x_0 = np.array([0.,0.,np.deg2rad(0.)]) 
 
 # location of beacon
 m_1 = np.array([97.89,70.1])
 
 # covariance of process noise
 Q = np.array([
-    [.49,  0,  0],     # stdev = .7m
-    [  0,.49,  0],
-    [  0,  0, np.deg2rad(25)]])     # stdev = 5 degree
+    [  0,  0,  0],     # stdev = .7m
+    [  0,  0,  0],
+    [  0,  0,  0]])     # stdev = 5 degree
 
 # covariance of measurement noise
 R = np.array([
-    [0.625,   0.],
+    [0.25,   0.],
     [   0.,   np.deg2rad(1)]])
 
 def predict(_x,u,_cov):
@@ -99,19 +99,24 @@ def update(x,cov,data):
         my = x[i_my] 
 
         r = math.sqrt((mx-x[0])**2 + (my-x[1])**2)
-        th = math.atan2(my-x[1],mx-x[0])-x[2]
+        th = math.atan2((my-x[1]),(mx-x[0]))-x[2]
+
+        g1_x = (mx-x[0])/r
+        g1_y = (my-x[1])/r
+        g2_x = (my-x[1])/r**2
+        g2_y = (mx-x[0])/r**2
 
         _Jg_x = np.array([
-            [-(mx-x[0])/r,-(my-x[1])/r,0],
-            [(my-x[1])/r**2,-(mx-x[0])/r**2,-1]])
+            [-g1_x,-g1_y,0],
+            [g2_x,-g2_y,-1]])
         if Jg_x.size == 0:
             Jg_x = _Jg_x
         else:
             Jg_x = np.vstack([Jg_x,_Jg_x])
 
         _Jg_m = np.array([
-            [(mx-x[0])/r,(my-x[1])/r],
-            [-(my-x[1])/r**2,(mx-x[0])/r**2]])
+            [g1_x,g1_y],
+            [-g2_x,g2_y]])
         Jg_m = block_diag(Jg_m,_Jg_m)
 
         _error_r = i[1][0] - r
@@ -153,25 +158,25 @@ def new_landmark(x,cov,z):
     m_x = x[0] + z[0]*math.cos(x[2] + z[1])
     m_y = x[1] + z[0]*math.sin(x[2] + z[1])
     
-    dmx_dx = 1
-    dmx_dy = 0
+    dmx_dx = 1.0
+    dmx_dy = 0.
     dmx_dth = -z[0]*math.sin(x[2] + z[1])
     dmx_dr = math.cos(x[2] + z[1])
-    dmy_dx = 0
-    dmy_dy = 1
+    dmy_dx = 0.
+    dmy_dy = 1.0
     dmy_dth = z[0]*math.cos(x[2] + z[1])
     dmy_dr = math.sin(x[2] + z[1])
 
     new_x = np.concatenate((x,np.array([m_x,m_y])))
 
     # Jacobian of augmentation function
-    _Ja = np.column_stack([cov,np.zeros((cov.shape[0],2))])
+    _Ja = np.column_stack([np.eye(3+n*2),np.zeros((cov.shape[0],2))])
     Jh_x = np.array([
         [dmx_dx,dmx_dy,dmx_dth],
-        [dmy_dx,dmy_dy,dmx_dth]])
+        [dmy_dx,dmy_dy,dmy_dth]])
     Jh_z = np.array([
         [dmx_dr,dmx_dth],
-        [dmy_dr,dmx_dth]])
+        [dmy_dr,dmy_dth]])
     
     if n != 0:
         Ja_last_rows = np.column_stack([Jh_x,np.zeros((2,n*2)),Jh_z])
@@ -196,9 +201,9 @@ def assoc_data():
 def main():
     x = x_0
     cov = np.array([
-        [ .1, 0., 0.],     
-        [ 0., .1, 0.],
-        [ 0., 0., np.deg2rad(1)]])     
+        [ 0.49, 0., 0.],     
+        [ 0., 0.49, 0.],
+        [ 0., 0., np.deg2rad(25)]])     
 
     u = np.array([0.,0.,np.deg2rad(0.)])
 
@@ -206,15 +211,25 @@ def main():
     z = measure(x,m_1)
     [x_k,cov_k] = new_landmark(x,cov,z)
 
-    iter = 50
-    for num in range(iter):
+    print(0,abs(x_k[0]),math.sqrt(cov_k[0][0]),-math.sqrt(cov_k[0][0]))
+#    print(0,abs(x_k[1]),math.sqrt(cov_k[1][1]),-math.sqrt(cov_k[1][1]))
+#    print(0,abs(x_k[2]),math.sqrt(cov_k[2][2]),-math.sqrt(cov_k[2][2]))
+#    print(0,abs(x_k[3]-97.89),math.sqrt(cov_k[3][3]),-math.sqrt(cov_k[3][3]))
+#    print(0,abs(x_k[4]-70.1),math.sqrt(cov_k[4][4]),-math.sqrt(cov_k[4][4]))
+
+    iter = 100
+    for num in range(1,iter):
         [x,cov] = [x_k,cov_k]
         u = np.array([0.,0.,np.deg2rad(0.)])
-        [_x,_cov] = predict(x,u,cov)
+
+        if u.any() != 0:
+            [_x,_cov] = predict(x,u,cov)
+        else:
+            [_x,_cov] = [x,cov]
 
         # new measurement and data association
         # data association -> index of landmark
-        z = measure(_x,m_1) # simulate one detection of landmark
+        z = measure(x,m_1) # simulate one detection of landmark
         data = [[3,z]]
         
         if data:
@@ -222,7 +237,12 @@ def main():
         else:
             [x_k,cov_k] = [_x,_cov]
 
-        print(x_k)
-        
+        print(num,abs(x_k[0]),math.sqrt(cov_k[0][0]),-math.sqrt(cov_k[0][0]))
+#        print(num,abs(x_k[1]),math.sqrt(cov_k[1][1]),-math.sqrt(cov_k[1][1]))
+#        print(num,abs(x_k[2]),math.sqrt(cov_k[2][2]),-math.sqrt(cov_k[2][2]))
+#        print(num,abs(x_k[3]-97.89),math.sqrt(cov_k[3][3]),-math.sqrt(cov_k[3][3]))
+#        print(num,abs(x_k[4]-70.1),math.sqrt(cov_k[4][4]),-math.sqrt(cov_k[4][4]))
+
+
 if __name__ == "__main__":
     main()
