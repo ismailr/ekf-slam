@@ -98,14 +98,6 @@ def update(x,cov,data):
         mx = x[i_mx] 
         my = x[i_my] 
 
-#        d
-#        fdfdfs
-#
-#        dfsd
-#        fsd
-#        fsd
-#        
-
         r = math.sqrt((mx-x[0])**2 + (my-x[1])**2)
         th = math.atan2((my-x[1]),(mx-x[0]))-x[2]
 
